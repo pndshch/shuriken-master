@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>手裏剣マスター - Shuriken Master</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #1a0a00; font-family: 'Segoe UI', sans-serif; touch-action: none; }
+canvas { display: block; width: 100vw; height: 100vh; }
+
+#hud {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+
+#score-panel {
+  position: absolute; top: 15px; left: 15px;
+  color: #ff6a00; text-shadow: 0 0 10px rgba(255,106,0,0.8);
+}
+#score-panel .score { font-size: 28px; font-weight: bold; }
+#score-panel .combo { font-size: 18px; color: #ffcc00; margin-top: 4px; }
+
+#wave-panel {
+  position: absolute; top: 15px; right: 15px; text-align: right;
+  color: #ff6a00; text-shadow: 0 0 10px rgba(255,106,0,0.8);
+}
+#wave-panel .wave { font-size: 20px; font-weight: bold; }
+#wave-panel .lives { font-size: 22px; margin-top: 4px; }
+
+#powerups {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; pointer-events: all;
+}
+.powerup-btn {
+  width: 64px; height: 64px; border-radius: 12px;
+  background: rgba(0,0,0,0.7); border: 2px solid #ff6a00;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; cursor: pointer; position: relative;
+  transition: all 0.2s;
+}
+.powerup-btn:active { transform: scale(0.9); }
+.powerup-btn .kanji { font-size: 22px; color: #ffcc00; }
+.powerup-btn .count {
+  position: absolute; top: -5px; right: -5px;
+  background: #ff3300; color: #fff; border-radius: 50%;
+  width: 20px; height: 20px; font-size: 12px; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+}
+.powerup-btn.disabled { opacity: 0.4; border-color: #555; }
+
+#wave-announce {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 60px; font-weight: bold; color: #ff6a00;
+  text-shadow: 0 0 30px rgba(255,106,0,0.9), 0 0 60px rgba(255,50,0,0.5);
+  opacity: 0; transition: opacity 0.3s;
+  pointer-events: none;
+}
+#wave-announce.show { opacity: 1; }
+
+#crosshair {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 30px; height: 30px; pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: ''; position: absolute; background: rgba(255,106,0,0.6);
+}
+#crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+#crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+#start-screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(ellipse at center, #2a1000 0%, #0a0000 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 100; color: #ff6a00;
+}
+#start-screen h1 { font-size: 48px; text-shadow: 0 0 30px rgba(255,106,0,0.8); margin-bottom: 8px; }
+#start-screen .subtitle { font-size: 20px; color: #ffcc00; margin-bottom: 40px; }
+#start-screen .instructions { color: #ccc; font-size: 14px; text-align: center; line-height: 2; margin-bottom: 30px; }
+#start-btn {
+  padding: 15px 50px; font-size: 24px; font-weight: bold;
+  background: linear-gradient(135deg, #ff6a00, #ff3300);
+  border: none; border-radius: 8px; color: #fff; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  box-shadow: 0 0 30px rgba(255,106,0,0.5);
+  transition: transform 0.2s;
+}
+#start-btn:hover { transform: scale(1.05); }
+
+#game-over {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 100; color: #ff6a00;
+}
+#game-over h1 { font-size: 42px; margin-bottom: 10px; }
+#game-over .final-score { font-size: 28px; color: #ffcc00; margin-bottom: 30px; }
+#restart-btn {
+  padding: 12px 40px; font-size: 20px;
+  background: linear-gradient(135deg, #ff6a00, #ff3300);
+  border: none; border-radius: 8px; color: #fff; cursor: pointer;
+  box-shadow: 0 0 20px rgba(255,106,0,0.5);
+}
+
+#slow-mo-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  border: 4px solid rgba(255,0,0,0.5); pointer-events: none;
+  z-index: 5; opacity: 0; transition: opacity 0.3s;
+  box-shadow: inset 0 0 60px rgba(255,0,0,0.3);
+}
+#slow-mo-overlay.active { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="start-screen">
+  <h1>手裏剣マスター</h1>
+  <div class="subtitle">Shuriken Master</div>
+  <div class="instructions">
+    クリック/タップで手裏剣を投げる<br>Click/Tap to throw shuriken<br><br>
+    的を壊してスコアを稼げ！<br>Destroy targets to score!<br><br>
+    連続ヒットでコンボボーナス<br>Chain hits for combo bonus
+  </div>
+  <button id="start-btn">始める / START</button>
+</div>
+
+<div id="game-over">
+  <h1>ゲームオーバー</h1>
+  <div class="final-score"></div>
+  <button id="restart-btn">もう一度 / RETRY</button>
+</div>
+
+<div id="hud">
+  <div id="score-panel">
+    <div class="score">0</div>
+    <div class="combo"></div>
+  </div>
+  <div id="wave-panel">
+    <div class="wave">WAVE 1</div>
+    <div class="lives">❤️❤️❤️❤️❤️</div>
+  </div>
+  <div id="powerups">
+    <div class="powerup-btn" data-power="clone">
+      <span class="count">3</span>
+      <span class="kanji">影</span>
+      <span>Clone</span>
+    </div>
+    <div class="powerup-btn" data-power="rasengan">
+      <span class="count">2</span>
+      <span class="kanji">螺</span>
+      <span>Rasengan</span>
+    </div>
+    <div class="powerup-btn" data-power="sharingan">
+      <span class="count">1</span>
+      <span class="kanji">写</span>
+      <span>Sharingan</span>
+    </div>
+  </div>
+  <div id="wave-announce"></div>
+  <div id="crosshair"></div>
+</div>
+
+<div id="slow-mo-overlay"></div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ========== GAME STATE ==========
+const state = {
+  score: 0,
+  combo: 0,
+  comboTimer: 0,
+  wave: 1,
+  lives: 5,
+  maxLives: 5,
+  missesThisWave: 0,
+  targetsDestroyed: 0,
+  targetsTotal: 0,
+  gameStarted: false,
+  gameOver: false,
+  waveActive: false,
+  slowMotion: false,
+  slowMotionTimer: 0,
+  powerups: { clone: 3, rasengan: 2, sharingan: 1 },
+  activePower: null,
+  shuriken: [],
+  targets: [],
+  particles: [],
+  waveTargetsSpawned: 0,
+  waveTargetsNeeded: 0,
+  spawnTimer: 0,
+  spawnInterval: 1.5,
+};
+
+// ========== THREE.JS SETUP ==========
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x1a0a00, 15, 40);
+
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 2, 8);
+camera.lookAt(0, 2, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+document.body.prepend(renderer.domElement);
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0x443322, 0.6);
+scene.add(ambientLight);
+
+const mainLight = new THREE.DirectionalLight(0xffaa55, 1.2);
+mainLight.position.set(5, 10, 5);
+mainLight.castShadow = true;
+mainLight.shadow.mapSize.set(1024, 1024);
+mainLight.shadow.camera.near = 1;
+mainLight.shadow.camera.far = 30;
+mainLight.shadow.camera.left = -15;
+mainLight.shadow.camera.right = 15;
+mainLight.shadow.camera.top = 15;
+mainLight.shadow.camera.bottom = -15;
+scene.add(mainLight);
+
+const fillLight = new THREE.PointLight(0xff4400, 0.5, 20);
+fillLight.position.set(-3, 4, 6);
+scene.add(fillLight);
+
+// ========== PROCEDURAL TEXTURES ==========
+function createWoodTexture(dark = false) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const baseColor = dark ? '#2a1a0a' : '#8B6914';
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 40; i++) {
+    const y = Math.random() * 256;
+    ctx.strokeStyle = dark ? `rgba(60,30,10,${Math.random()*0.5})` : `rgba(100,60,10,${Math.random()*0.4})`;
+    ctx.lineWidth = Math.random() * 3 + 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x < 256; x += 20) {
+      ctx.lineTo(x, y + (Math.random() - 0.5) * 6);
+    }
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  return tex;
+}
+
+function createFloorTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#5a3a1a';
+  ctx.fillRect(0, 0, 512, 512);
+  const plankW = 64;
+  for (let x = 0; x < 512; x += plankW) {
+    ctx.strokeStyle = '#3a2210';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, 0, plankW, 512);
+    for (let i = 0; i < 20; i++) {
+      const y = Math.random() * 512;
+      ctx.strokeStyle = `rgba(80,50,20,${Math.random()*0.3})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + plankW, y + (Math.random()-0.5)*8);
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  return tex;
+}
+
+// ========== DOJO ENVIRONMENT ==========
+// Floor
+const floorGeo = new THREE.PlaneGeometry(30, 30);
+const floorMat = new THREE.MeshStandardMaterial({ map: createFloorTexture(), roughness: 0.8 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Back wall
+const wallTex = createWoodTexture(true);
+const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 });
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+backWall.position.set(0, 5, -10);
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+// Side walls
+const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+leftWall.position.set(-15, 5, 0);
+leftWall.rotation.y = Math.PI / 2;
+scene.add(leftWall);
+
+const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+rightWall.position.set(15, 5, 0);
+rightWall.rotation.y = -Math.PI / 2;
+scene.add(rightWall);
+
+// Ceiling beams
+const beamMat = new THREE.MeshStandardMaterial({ color: 0x3a2210, roughness: 0.9 });
+for (let i = -2; i <= 2; i++) {
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 30), beamMat);
+  beam.position.set(i * 5, 8, 0);
+  beam.castShadow = true;
+  scene.add(beam);
+}
+
+// Decorative lanterns
+const lanternMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0xff4400, emissiveIntensity: 0.5 });
+for (let i = -2; i <= 2; i += 2) {
+  const lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.5, 8), lanternMat);
+  lantern.position.set(i * 4, 6, -9);
+  scene.add(lantern);
+  const pLight = new THREE.PointLight(0xff6600, 0.3, 8);
+  pLight.position.copy(lantern.position);
+  scene.add(pLight);
+}
+
+// Static training posts (decoration)
+const postMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.7 });
+for (let i = -2; i <= 2; i += 4) {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 4, 8), postMat);
+  post.position.set(i * 2, 2, -8);
+  post.castShadow = true;
+  scene.add(post);
+}
+
+// ========== SHURIKEN GEOMETRY ==========
+function createShurikenGeometry() {
+  const shape = new THREE.Shape();
+  const points = 4;
+  const outerR = 0.25;
+  const innerR = 0.08;
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
+    const nextAngle = ((i + 0.5) / points) * Math.PI * 2 - Math.PI / 2;
+    const ox = Math.cos(angle) * outerR;
+    const oy = Math.sin(angle) * outerR;
+    const ix = Math.cos(nextAngle) * innerR;
+    const iy = Math.sin(nextAngle) * innerR;
+    if (i === 0) shape.moveTo(ox, oy);
+    else shape.lineTo(ox, oy);
+    shape.lineTo(ix, iy);
+  }
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 1 });
+  geo.center();
+  return geo;
+}
+
+const shurikenGeo = createShurikenGeometry();
+const shurikenMat = new THREE.MeshStandardMaterial({
+  color: 0x888888, metalness: 0.9, roughness: 0.2,
+});
+
+// ========== TARGET CREATION ==========
+function createTrainingPost(x, y, z, hp = 1, isBoss = false) {
+  const group = new THREE.Group();
+  const scale = isBoss ? 1.5 : 1;
+  const height = isBoss ? 3 : 2;
+
+  // Post body
+  const bodyGeo = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, height, 8);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    map: createWoodTexture(), roughness: 0.7,
+    color: isBoss ? 0xff4400 : 0xffffff
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.castShadow = true;
+  group.add(body);
+
+  // Target ring
+  const ringGeo = new THREE.TorusGeometry(0.3 * scale, 0.05, 8, 16);
+  const ringMat = new THREE.MeshStandardMaterial({
+    color: isBoss ? 0xff0000 : 0xff6a00,
+    emissive: isBoss ? 0x880000 : 0xff4400,
+    emissiveIntensity: 0.3
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.position.y = height * 0.3;
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  // Boss indicator
+  if (isBoss) {
+    const crownGeo = new THREE.ConeGeometry(0.15, 0.3, 4);
+    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xff8800, emissiveIntensity: 0.3 });
+    const crown = new THREE.Mesh(crownGeo, crownMat);
+    crown.position.y = height * 0.6;
+    group.add(crown);
+  }
+
+  group.position.set(x, y + height / 2, z);
+  scene.add(group);
+
+  return {
+    mesh: group,
+    hp: hp,
+    maxHp: hp,
+    isBoss: isBoss,
+    alive: true,
+    spawnTime: performance.now(),
+    movePattern: Math.random() > 0.5 ? 'sway' : 'none',
+    moveSpeed: 0.5 + Math.random() * 1.5,
+    moveOffset: Math.random() * Math.PI * 2,
+    baseX: x,
+    baseY: y + height / 2,
+    radius: 0.35 * scale,
+    height: height,
+  };
+}
+
+function createDummy(x, y, z, hp = 1) {
+  const group = new THREE.Group();
+
+  // Body
+  const bodyGeo = new THREE.CylinderGeometry(0.2, 0.25, 1.2, 8);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x886644, roughness: 0.8 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.6;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.2, 12, 8);
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xaa8866, roughness: 0.7 });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.y = 1.4;
+  head.castShadow = true;
+  group.add(head);
+
+  // Arms
+  for (let side of [-1, 1]) {
+    const armGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 6);
+    const arm = new THREE.Mesh(armGeo, bodyMat);
+    arm.position.set(side * 0.35, 0.8, 0);
+    arm.rotation.z = side * 0.5;
+    group.add(arm);
+  }
+
+  // Target marker
+  const markerGeo = new THREE.CircleGeometry(0.15, 16);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+  const marker = new THREE.Mesh(markerGeo, markerMat);
+  marker.position.set(0, 0.8, 0.26);
+  group.add(marker);
+
+  group.position.set(x, y, z);
+  scene.add(group);
+
+  return {
+    mesh: group,
+    hp: hp,
+    maxHp: hp,
+    isBoss: false,
+    alive: true,
+    spawnTime: performance.now(),
+    movePattern: 'strafe',
+    moveSpeed: 1 + Math.random() * 2,
+    moveOffset: Math.random() * Math.PI * 2,
+    baseX: x,
+    baseY: y,
+    radius: 0.4,
+    height: 1.6,
+  };
+}
+
+// ========== PARTICLES ==========
+function spawnParticles(position, color, count = 15) {
+  for (let i = 0; i < count; i++) {
+    const size = 0.03 + Math.random() * 0.08;
+    const geo = new THREE.BoxGeometry(size, size, size);
+    const mat = new THREE.MeshBasicMaterial({ color: color });
+    const particle = new THREE.Mesh(geo, mat);
+    particle.position.copy(position);
+    const vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 8,
+      Math.random() * 6 + 2,
+      (Math.random() - 0.5) * 8
+    );
+    scene.add(particle);
+    state.particles.push({ mesh: particle, vel, life: 1, decay: 0.02 + Math.random() * 0.02 });
+  }
+}
+
+function spawnExplosion(position) {
+  // Big orange flash
+  const flashGeo = new THREE.SphereGeometry(2, 16, 8);
+  const flashMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 });
+  const flash = new THREE.Mesh(flashGeo, flashMat);
+  flash.position.copy(position);
+  scene.add(flash);
+  state.particles.push({ mesh: flash, vel: new THREE.Vector3(0,0,0), life: 1, decay: 0.05, isFlash: true });
+
+  spawnParticles(position, 0xff4400, 30);
+  spawnParticles(position, 0xffcc00, 20);
+}
+
+// ========== SHURIKEN THROWING ==========
+function throwShuriken(targetPos, offset = new THREE.Vector3(0,0,0)) {
+  const shuriken = new THREE.Mesh(shurikenGeo, shurikenMat.clone());
+  const startPos = camera.position.clone().add(new THREE.Vector3(0, -0.3, 0));
+  shuriken.position.copy(startPos);
+  shuriken.castShadow = true;
+  scene.add(shuriken);
+
+  const target = targetPos.clone().add(offset);
+  const direction = target.clone().sub(startPos).normalize();
+  const speed = 25;
+
+  state.shuriken.push({
+    mesh: shuriken,
+    velocity: direction.multiplyScalar(speed),
+    life: 3,
+    isRasengan: state.activePower === 'rasengan',
+  });
+}
+
+// ========== GAME LOGIC ==========
+function startWave() {
+  state.waveActive = true;
+  state.waveTargetsSpawned = 0;
+  state.waveTargetsNeeded = 5 + state.wave * 3;
+  state.spawnInterval = Math.max(0.4, 1.5 - state.wave * 0.1);
+  state.spawnTimer = 0;
+  state.missesThisWave = 0;
+
+  // Show wave announcement
+  const announce = document.getElementById('wave-announce');
+  announce.textContent = `WAVE ${state.wave}!`;
+  announce.classList.add('show');
+  setTimeout(() => announce.classList.remove('show'), 2000);
+}
+
+function spawnTarget() {
+  const x = (Math.random() - 0.5) * 12;
+  const y = Math.random() * 3;
+  const z = -3 - Math.random() * 6;
+
+  const waveProgress = state.waveTargetsSpawned / state.waveTargetsNeeded;
+
+  // Boss on last target of wave (if wave >= 3)
+  if (state.wave >= 3 && state.waveTargetsSpawned === state.waveTargetsNeeded - 1) {
+    const boss = createTrainingPost(x, y, z, 3 + Math.floor(state.wave / 2), true);
+    state.targets.push(boss);
+  } else if (Math.random() > 0.5) {
+    const hp = state.wave >= 4 ? 2 : 1;
+    state.targets.push(createTrainingPost(x, y, z, hp));
+  } else {
+    state.targets.push(createDummy(x, y, z, 1));
+  }
+
+  state.waveTargetsSpawned++;
+}
+
+function checkHits() {
+  for (let si = state.shuriken.length - 1; si >= 0; si--) {
+    const s = state.shuriken[si];
+    const sPos = s.mesh.position;
+
+    for (let ti = state.targets.length - 1; ti >= 0; ti--) {
+      const t = state.targets[ti];
+      if (!t.alive) continue;
+
+      const tPos = t.mesh.position;
+      const dist = sPos.distanceTo(tPos);
+      const hitDist = s.isRasengan ? 2.5 : t.radius + 0.3;
+
+      if (dist < hitDist) {
+        // Hit!
+        if (s.isRasengan) {
+          // Rasengan hits all nearby targets
+          spawnExplosion(sPos);
+          for (const target of state.targets) {
+            if (!target.alive) continue;
+            if (target.mesh.position.distanceTo(sPos) < 3) {
+              target.hp -= 5;
+              if (target.hp <= 0) destroyTarget(target);
+            }
+          }
+        } else {
+          t.hp--;
+          spawnParticles(sPos, 0x8B6914, 8);
+
+          if (t.hp <= 0) {
+            destroyTarget(t);
+          } else {
+            // Flash red
+            t.mesh.children[0].material.emissive = new THREE.Color(0xff0000);
+            t.mesh.children[0].material.emissiveIntensity = 0.5;
+            setTimeout(() => {
+              if (t.mesh.children[0]) {
+                t.mesh.children[0].material.emissiveIntensity = 0;
+              }
+            }, 150);
+          }
+        }
+
+        // Remove shuriken
+        scene.remove(s.mesh);
+        state.shuriken.splice(si, 1);
+        break;
+      }
+    }
+  }
+}
+
+function destroyTarget(target) {
+  target.alive = false;
+  spawnParticles(target.mesh.position, 0x8B6914, 20);
+  spawnParticles(target.mesh.position, 0xff6a00, 10);
+  scene.remove(target.mesh);
+
+  // Score
+  state.combo++;
+  state.comboTimer = 2;
+  const multiplier = Math.min(state.combo, 10);
+  const points = (target.isBoss ? 500 : 100) * multiplier;
+  state.score += points;
+
+  state.targetsDestroyed++;
+  updateHUD();
+}
+
+function missTarget(target) {
+  target.alive = false;
+  scene.remove(target.mesh);
+  state.lives--;
+  state.combo = 0;
+  updateHUD();
+
+  if (state.lives <= 0) {
+    endGame();
+  }
+}
+
+function endGame() {
+  state.gameOver = true;
+  state.gameStarted = false;
+  const gameOverEl = document.getElementById('game-over');
+  gameOverEl.style.display = 'flex';
+  gameOverEl.querySelector('.final-score').textContent =
+    `スコア / Score: ${state.score} | Wave ${state.wave}`;
+}
+
+function resetGame() {
+  // Clean up
+  state.targets.forEach(t => { if (t.mesh.parent) scene.remove(t.mesh); });
+  state.shuriken.forEach(s => scene.remove(s.mesh));
+  state.particles.forEach(p => scene.remove(p.mesh));
+
+  state.score = 0;
+  state.combo = 0;
+  state.comboTimer = 0;
+  state.wave = 1;
+  state.lives = 5;
+  state.gameOver = false;
+  state.gameStarted = true;
+  state.targets = [];
+  state.shuriken = [];
+  state.particles = [];
+  state.powerups = { clone: 3, rasengan: 2, sharingan: 1 };
+  state.slowMotion = false;
+  state.activePower = null;
+  state.waveTargetsSpawned = 0;
+  state.targetsDestroyed = 0;
+
+  document.getElementById('slow-mo-overlay').classList.remove('active');
+  updateHUD();
+  updatePowerupButtons();
+  startWave();
+}
+
+// ========== HUD ==========
+function updateHUD() {
+  document.querySelector('#score-panel .score').textContent = state.score;
+  const comboEl = document.querySelector('#score-panel .combo');
+  if (state.combo > 1) {
+    comboEl.textContent = `COMBO x${state.combo}`;
+  } else {
+    comboEl.textContent = '';
+  }
+  document.querySelector('#wave-panel .wave').textContent = `WAVE ${state.wave}`;
+  document.querySelector('#wave-panel .lives').textContent = '❤️'.repeat(state.lives) + '🖤'.repeat(state.maxLives - state.lives);
+}
+
+function updatePowerupButtons() {
+  document.querySelectorAll('.powerup-btn').forEach(btn => {
+    const power = btn.dataset.power;
+    const count = state.powerups[power];
+    btn.querySelector('.count').textContent = count;
+    btn.classList.toggle('disabled', count <= 0);
+  });
+}
+
+// ========== INPUT ==========
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+function getClickTarget(event) {
+  const x = event.clientX || (event.touches && event.touches[0].clientX);
+  const y = event.clientY || (event.touches && event.touches[0].clientY);
+  mouse.x = (x / window.innerWidth) * 2 - 1;
+  mouse.y = -(y / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  // Get point on a plane at z=-2 (target area)
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 5);
+  const targetPoint = new THREE.Vector3();
+  raycaster.ray.intersectPlane(plane, targetPoint);
+
+  if (!targetPoint) {
+    return new THREE.Vector3(mouse.x * 8, mouse.y * 4 + 2, -5);
+  }
+  return targetPoint;
+}
+
+function handleThrow(event) {
+  if (!state.gameStarted || state.gameOver) return;
+
+  // Don't throw if clicking powerup buttons
+  if (event.target.closest && event.target.closest('.powerup-btn')) return;
+
+  const target = getClickTarget(event);
+
+  if (state.activePower === 'clone') {
+    // Shadow clone: 3 shuriken spread
+    throwShuriken(target, new THREE.Vector3(-0.5, 0.3, 0));
+    throwShuriken(target, new THREE.Vector3(0, 0, 0));
+    throwShuriken(target, new THREE.Vector3(0.5, 0.3, 0));
+    state.activePower = null;
+  } else if (state.activePower === 'rasengan') {
+    throwShuriken(target);
+    state.activePower = null;
+  } else {
+    throwShuriken(target);
+  }
+}
+
+renderer.domElement.addEventListener('click', handleThrow);
+renderer.domElement.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleThrow(e);
+}, { passive: false });
+
+// Powerup buttons
+document.querySelectorAll('.powerup-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const power = btn.dataset.power;
+    if (state.powerups[power] <= 0 || !state.gameStarted) return;
+
+    state.powerups[power]--;
+    updatePowerupButtons();
+
+    if (power === 'sharingan') {
+      state.slowMotion = true;
+      state.slowMotionTimer = 5;
+      document.getElementById('slow-mo-overlay').classList.add('active');
+    } else {
+      state.activePower = power;
+    }
+  });
+
+  btn.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    btn.click();
+  }, { passive: false });
+});
+
+// Start / Restart
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('start-screen').style.display = 'none';
+  state.gameStarted = true;
+  resetGame();
+});
+
+document.getElementById('restart-btn').addEventListener('click', () => {
+  document.getElementById('game-over').style.display = 'none';
+  resetGame();
+});
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ========== GAME LOOP ==========
+let lastTime = performance.now();
+
+function update() {
+  const now = performance.now();
+  let dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  if (!state.gameStarted || state.gameOver) {
+    renderer.render(scene, camera);
+    requestAnimationFrame(update);
+    return;
+  }
+
+  // Slow motion
+  if (state.slowMotion) {
+    state.slowMotionTimer -= dt;
+    dt *= 0.3;
+    if (state.slowMotionTimer <= 0) {
+      state.slowMotion = false;
+      document.getElementById('slow-mo-overlay').classList.remove('active');
+    }
+  }
+
+  // Combo decay
+  if (state.comboTimer > 0) {
+    state.comboTimer -= dt;
+    if (state.comboTimer <= 0) {
+      state.combo = 0;
+      updateHUD();
+    }
+  }
+
+  // Spawn targets
+  if (state.waveActive && state.waveTargetsSpawned < state.waveTargetsNeeded) {
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) {
+      spawnTarget();
+      state.spawnTimer = state.spawnInterval;
+    }
+  }
+
+  // Check wave completion
+  if (state.waveActive && state.waveTargetsSpawned >= state.waveTargetsNeeded) {
+    const aliveTargets = state.targets.filter(t => t.alive);
+    if (aliveTargets.length === 0) {
+      state.waveActive = false;
+      state.wave++;
+      // Bonus powerups every 3 waves
+      if (state.wave % 3 === 0) {
+        state.powerups.clone += 2;
+        state.powerups.rasengan += 1;
+        state.powerups.sharingan += 1;
+        updatePowerupButtons();
+      }
+      setTimeout(() => startWave(), 1500);
+    }
+  }
+
+  // Update shuriken
+  for (let i = state.shuriken.length - 1; i >= 0; i--) {
+    const s = state.shuriken[i];
+    s.mesh.position.add(s.velocity.clone().multiplyScalar(dt));
+    s.mesh.rotation.z += dt * 25; // Spin!
+    s.velocity.y -= dt * 5; // Gravity (slight arc)
+    s.life -= dt;
+
+    if (s.life <= 0 || s.mesh.position.z < -15 || s.mesh.position.y < -5) {
+      scene.remove(s.mesh);
+      state.shuriken.splice(i, 1);
+    }
+  }
+
+  // Update targets
+  for (let i = state.targets.length - 1; i >= 0; i--) {
+    const t = state.targets[i];
+    if (!t.alive) continue;
+
+    const elapsed = (now - t.spawnTime) / 1000;
+
+    // Movement
+    if (t.movePattern === 'sway') {
+      t.mesh.position.x = t.baseX + Math.sin(elapsed * t.moveSpeed + t.moveOffset) * 1.5;
+    } else if (t.movePattern === 'strafe') {
+      t.mesh.position.x = t.baseX + Math.sin(elapsed * t.moveSpeed + t.moveOffset) * 2.5;
+      t.mesh.position.y = t.baseY + Math.sin(elapsed * t.moveSpeed * 0.7 + t.moveOffset) * 0.5;
+    }
+
+    // Targets expire after some time - miss penalty
+    const lifespan = Math.max(3, 8 - state.wave * 0.3);
+    if (elapsed > lifespan) {
+      missTarget(t);
+      state.targets.splice(i, 1);
+    }
+  }
+
+  // Update particles
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    if (!p.isFlash) {
+      p.vel.y -= dt * 15;
+    }
+    p.life -= p.decay;
+    p.mesh.material.opacity = p.life;
+    p.mesh.material.transparent = true;
+
+    if (p.isFlash) {
+      p.mesh.scale.multiplyScalar(1 + dt * 5);
+    }
+
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      state.particles.splice(i, 1);
+    }
+  }
+
+  // Hit detection
+  checkHits();
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(update);
+}
+
+update();
+</script>
+</body>
+</html>
