@@ -19,7 +19,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
   color: #ff6a00; text-shadow: 0 0 10px rgba(255,106,0,0.8);
 }
 #score-panel .score { font-size: 28px; font-weight: bold; }
-#score-panel .combo { font-size: 18px; color: #ffcc00; margin-top: 4px; }
+#score-panel .combo { font-size: 20px; color: #ffcc00; margin-top: 4px; font-weight: bold; }
 
 #wave-panel {
   position: absolute; top: 15px; right: 15px; text-align: right;
@@ -37,7 +37,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
   background: rgba(0,0,0,0.7); border: 2px solid #ff6a00;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: #fff; font-size: 11px; cursor: pointer; position: relative;
-  transition: all 0.2s;
+  transition: all 0.2s; -webkit-tap-highlight-color: transparent;
 }
 .powerup-btn:active { transform: scale(0.9); }
 .powerup-btn .kanji { font-size: 22px; color: #ffcc00; }
@@ -48,13 +48,22 @@ canvas { display: block; width: 100vw; height: 100vh; }
   display: flex; align-items: center; justify-content: center;
 }
 .powerup-btn.disabled { opacity: 0.4; border-color: #555; }
+.powerup-btn.active-power { border-color: #ffcc00; box-shadow: 0 0 15px rgba(255,204,0,0.7); }
+
+#active-power-label {
+  position: absolute; bottom: 95px; left: 50%; transform: translateX(-50%);
+  color: #ffcc00; font-size: 16px; font-weight: bold;
+  text-shadow: 0 0 10px rgba(255,204,0,0.8);
+  opacity: 0; transition: opacity 0.2s;
+}
+#active-power-label.show { opacity: 1; }
 
 #wave-announce {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   font-size: 60px; font-weight: bold; color: #ff6a00;
   text-shadow: 0 0 30px rgba(255,106,0,0.9), 0 0 60px rgba(255,50,0,0.5);
   opacity: 0; transition: opacity 0.3s;
-  pointer-events: none;
+  pointer-events: none; white-space: nowrap;
 }
 #wave-announce.show { opacity: 1; }
 
@@ -67,6 +76,19 @@ canvas { display: block; width: 100vw; height: 100vh; }
 }
 #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
 #crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+
+#hit-texts {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: hidden;
+}
+.hit-text {
+  position: absolute; font-weight: bold; pointer-events: none;
+  animation: hitFloat 1s ease-out forwards;
+}
+@keyframes hitFloat {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.3); }
+}
 
 #start-screen {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -83,7 +105,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
   border: none; border-radius: 8px; color: #fff; cursor: pointer;
   text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   box-shadow: 0 0 30px rgba(255,106,0,0.5);
-  transition: transform 0.2s;
+  transition: transform 0.2s; -webkit-tap-highlight-color: transparent;
 }
 #start-btn:hover { transform: scale(1.05); }
 
@@ -93,22 +115,31 @@ canvas { display: block; width: 100vw; height: 100vh; }
   display: none; flex-direction: column; align-items: center; justify-content: center;
   z-index: 100; color: #ff6a00;
 }
-#game-over h1 { font-size: 42px; margin-bottom: 10px; }
+#game-over h1 { font-size: 42px; margin-bottom: 10px; text-shadow: 0 0 20px rgba(255,106,0,0.8); }
 #game-over .final-score { font-size: 28px; color: #ffcc00; margin-bottom: 30px; }
 #restart-btn {
   padding: 12px 40px; font-size: 20px;
   background: linear-gradient(135deg, #ff6a00, #ff3300);
   border: none; border-radius: 8px; color: #fff; cursor: pointer;
   box-shadow: 0 0 20px rgba(255,106,0,0.5);
+  -webkit-tap-highlight-color: transparent;
 }
 
 #slow-mo-overlay {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   border: 4px solid rgba(255,0,0,0.5); pointer-events: none;
   z-index: 5; opacity: 0; transition: opacity 0.3s;
-  box-shadow: inset 0 0 60px rgba(255,0,0,0.3);
+  box-shadow: inset 0 0 80px rgba(255,0,0,0.3);
 }
 #slow-mo-overlay.active { opacity: 1; }
+
+#slow-mo-timer {
+  position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+  color: #ff3333; font-size: 18px; font-weight: bold;
+  text-shadow: 0 0 10px rgba(255,0,0,0.8);
+  opacity: 0; transition: opacity 0.3s;
+}
+#slow-mo-timer.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -137,7 +168,7 @@ canvas { display: block; width: 100vw; height: 100vh; }
   </div>
   <div id="wave-panel">
     <div class="wave">WAVE 1</div>
-    <div class="lives">❤️❤️❤️❤️❤️</div>
+    <div class="lives"></div>
   </div>
   <div id="powerups">
     <div class="powerup-btn" data-power="clone">
@@ -156,8 +187,11 @@ canvas { display: block; width: 100vw; height: 100vh; }
       <span>Sharingan</span>
     </div>
   </div>
+  <div id="active-power-label"></div>
   <div id="wave-announce"></div>
   <div id="crosshair"></div>
+  <div id="hit-texts"></div>
+  <div id="slow-mo-timer"></div>
 </div>
 
 <div id="slow-mo-overlay"></div>
@@ -177,9 +211,6 @@ const state = {
   wave: 1,
   lives: 5,
   maxLives: 5,
-  missesThisWave: 0,
-  targetsDestroyed: 0,
-  targetsTotal: 0,
   gameStarted: false,
   gameOver: false,
   waveActive: false,
@@ -190,19 +221,22 @@ const state = {
   shuriken: [],
   targets: [],
   particles: [],
+  floatingTexts: [],
   waveTargetsSpawned: 0,
   waveTargetsNeeded: 0,
   spawnTimer: 0,
   spawnInterval: 1.5,
+  screenShake: 0,
 };
 
 // ========== THREE.JS SETUP ==========
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x1a0a00, 15, 40);
+scene.fog = new THREE.Fog(0x1a0a00, 18, 45);
 
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 2, 8);
+camera.position.set(0, 2.5, 8);
 camera.lookAt(0, 2, 0);
+const baseCamPos = camera.position.clone();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -210,14 +244,14 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.8;
+renderer.toneMappingExposure = 0.9;
 document.body.prepend(renderer.domElement);
 
 // Lights
-const ambientLight = new THREE.AmbientLight(0x443322, 0.6);
+const ambientLight = new THREE.AmbientLight(0x554433, 0.8);
 scene.add(ambientLight);
 
-const mainLight = new THREE.DirectionalLight(0xffaa55, 1.2);
+const mainLight = new THREE.DirectionalLight(0xffaa55, 1.4);
 mainLight.position.set(5, 10, 5);
 mainLight.castShadow = true;
 mainLight.shadow.mapSize.set(1024, 1024);
@@ -229,9 +263,13 @@ mainLight.shadow.camera.top = 15;
 mainLight.shadow.camera.bottom = -15;
 scene.add(mainLight);
 
-const fillLight = new THREE.PointLight(0xff4400, 0.5, 20);
+const fillLight = new THREE.PointLight(0xff4400, 0.6, 25);
 fillLight.position.set(-3, 4, 6);
 scene.add(fillLight);
+
+const backLight = new THREE.PointLight(0xff6600, 0.4, 20);
+backLight.position.set(0, 3, -8);
+scene.add(backLight);
 
 // ========== PROCEDURAL TEXTURES ==========
 function createWoodTexture(dark = false) {
@@ -297,19 +335,19 @@ scene.add(floor);
 // Back wall
 const wallTex = createWoodTexture(true);
 const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 });
-const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
-backWall.position.set(0, 5, -10);
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 12), wallMat);
+backWall.position.set(0, 6, -12);
 backWall.receiveShadow = true;
 scene.add(backWall);
 
 // Side walls
-const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
-leftWall.position.set(-15, 5, 0);
+const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 12), wallMat);
+leftWall.position.set(-15, 6, 0);
 leftWall.rotation.y = Math.PI / 2;
 scene.add(leftWall);
 
-const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
-rightWall.position.set(15, 5, 0);
+const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 12), wallMat);
+rightWall.position.set(15, 6, 0);
 rightWall.rotation.y = -Math.PI / 2;
 scene.add(rightWall);
 
@@ -317,27 +355,47 @@ scene.add(rightWall);
 const beamMat = new THREE.MeshStandardMaterial({ color: 0x3a2210, roughness: 0.9 });
 for (let i = -2; i <= 2; i++) {
   const beam = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 30), beamMat);
-  beam.position.set(i * 5, 8, 0);
+  beam.position.set(i * 5, 9, 0);
   beam.castShadow = true;
   scene.add(beam);
 }
 
 // Decorative lanterns
-const lanternMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0xff4400, emissiveIntensity: 0.5 });
+const lanternMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0xff4400, emissiveIntensity: 0.6 });
 for (let i = -2; i <= 2; i += 2) {
   const lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 0.5, 8), lanternMat);
-  lantern.position.set(i * 4, 6, -9);
+  lantern.position.set(i * 4, 7, -11);
   scene.add(lantern);
-  const pLight = new THREE.PointLight(0xff6600, 0.3, 8);
+  const pLight = new THREE.PointLight(0xff6600, 0.4, 10);
   pLight.position.copy(lantern.position);
   scene.add(pLight);
 }
 
-// Static training posts (decoration)
+// Konoha emblem on back wall (circle + triangle leaf shape)
+const emblemGroup = new THREE.Group();
+const emblemRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.8, 0.06, 8, 32),
+  new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0xff4400, emissiveIntensity: 0.4 })
+);
+emblemGroup.add(emblemRing);
+// Leaf spiral
+const spiralShape = new THREE.Shape();
+spiralShape.moveTo(0, 0.5);
+spiralShape.bezierCurveTo(0.3, 0.3, 0.15, -0.1, 0, -0.3);
+spiralShape.bezierCurveTo(-0.15, -0.1, -0.3, 0.3, 0, 0.5);
+const spiralGeo = new THREE.ShapeGeometry(spiralShape);
+const spiralMesh = new THREE.Mesh(spiralGeo, new THREE.MeshStandardMaterial({
+  color: 0xff6a00, emissive: 0xff4400, emissiveIntensity: 0.3, side: THREE.DoubleSide
+}));
+emblemGroup.add(spiralMesh);
+emblemGroup.position.set(0, 5, -11.9);
+scene.add(emblemGroup);
+
+// Static training posts (decoration at far back)
 const postMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.7 });
-for (let i = -2; i <= 2; i += 4) {
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 4, 8), postMat);
-  post.position.set(i * 2, 2, -8);
+for (let i = -1; i <= 1; i += 2) {
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 3.5, 8), postMat);
+  post.position.set(i * 6, 1.75, -10);
   post.castShadow = true;
   scene.add(post);
 }
@@ -346,8 +404,8 @@ for (let i = -2; i <= 2; i += 4) {
 function createShurikenGeometry() {
   const shape = new THREE.Shape();
   const points = 4;
-  const outerR = 0.25;
-  const innerR = 0.08;
+  const outerR = 0.3;
+  const innerR = 0.09;
   for (let i = 0; i < points; i++) {
     const angle = (i / points) * Math.PI * 2 - Math.PI / 2;
     const nextAngle = ((i + 0.5) / points) * Math.PI * 2 - Math.PI / 2;
@@ -360,24 +418,24 @@ function createShurikenGeometry() {
     shape.lineTo(ix, iy);
   }
   shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.005, bevelSegments: 1 });
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 });
   geo.center();
   return geo;
 }
 
 const shurikenGeo = createShurikenGeometry();
 const shurikenMat = new THREE.MeshStandardMaterial({
-  color: 0x888888, metalness: 0.9, roughness: 0.2,
+  color: 0x999999, metalness: 0.95, roughness: 0.15,
 });
 
 // ========== TARGET CREATION ==========
 function createTrainingPost(x, y, z, hp = 1, isBoss = false) {
   const group = new THREE.Group();
-  const scale = isBoss ? 1.5 : 1;
-  const height = isBoss ? 3 : 2;
+  const scale = isBoss ? 1.8 : 1.2;
+  const height = isBoss ? 3.5 : 2.4;
 
   // Post body
-  const bodyGeo = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, height, 8);
+  const bodyGeo = new THREE.CylinderGeometry(0.22 * scale, 0.28 * scale, height, 8);
   const bodyMat = new THREE.MeshStandardMaterial({
     map: createWoodTexture(), roughness: 0.7,
     color: isBoss ? 0xff4400 : 0xffffff
@@ -386,25 +444,57 @@ function createTrainingPost(x, y, z, hp = 1, isBoss = false) {
   body.castShadow = true;
   group.add(body);
 
-  // Target ring
-  const ringGeo = new THREE.TorusGeometry(0.3 * scale, 0.05, 8, 16);
+  // Target ring (larger, more visible)
+  const ringGeo = new THREE.TorusGeometry(0.4 * scale, 0.06, 8, 20);
   const ringMat = new THREE.MeshStandardMaterial({
     color: isBoss ? 0xff0000 : 0xff6a00,
-    emissive: isBoss ? 0x880000 : 0xff4400,
-    emissiveIntensity: 0.3
+    emissive: isBoss ? 0xff0000 : 0xff6a00,
+    emissiveIntensity: 0.6
   });
   const ring = new THREE.Mesh(ringGeo, ringMat);
-  ring.position.y = height * 0.3;
+  ring.position.y = height * 0.25;
   ring.rotation.x = Math.PI / 2;
   group.add(ring);
 
+  // Second ring (visual flair)
+  const ring2Geo = new THREE.TorusGeometry(0.25 * scale, 0.03, 8, 16);
+  const ring2 = new THREE.Mesh(ring2Geo, ringMat);
+  ring2.position.y = height * 0.25;
+  ring2.rotation.x = Math.PI / 2;
+  group.add(ring2);
+
+  // Glowing point light on target for visibility
+  const targetGlow = new THREE.PointLight(
+    isBoss ? 0xff2200 : 0xff6a00,
+    isBoss ? 1.0 : 0.6,
+    isBoss ? 6 : 4
+  );
+  targetGlow.position.y = height * 0.25;
+  group.add(targetGlow);
+
   // Boss indicator
   if (isBoss) {
-    const crownGeo = new THREE.ConeGeometry(0.15, 0.3, 4);
-    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xff8800, emissiveIntensity: 0.3 });
+    const crownGeo = new THREE.ConeGeometry(0.2, 0.4, 4);
+    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 0.5 });
     const crown = new THREE.Mesh(crownGeo, crownMat);
     crown.position.y = height * 0.6;
     group.add(crown);
+
+    // HP bar background
+    const hpBgGeo = new THREE.PlaneGeometry(1.2, 0.12);
+    const hpBgMat = new THREE.MeshBasicMaterial({ color: 0x330000, side: THREE.DoubleSide });
+    const hpBg = new THREE.Mesh(hpBgGeo, hpBgMat);
+    hpBg.position.y = height * 0.75;
+    hpBg.name = 'hpBg';
+    group.add(hpBg);
+
+    // HP bar fill
+    const hpFillGeo = new THREE.PlaneGeometry(1.18, 0.10);
+    const hpFillMat = new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide });
+    const hpFill = new THREE.Mesh(hpFillGeo, hpFillMat);
+    hpFill.position.y = height * 0.75;
+    hpFill.name = 'hpFill';
+    group.add(hpFill);
   }
 
   group.position.set(x, y + height / 2, z);
@@ -412,18 +502,14 @@ function createTrainingPost(x, y, z, hp = 1, isBoss = false) {
 
   return {
     mesh: group,
-    hp: hp,
-    maxHp: hp,
-    isBoss: isBoss,
-    alive: true,
+    hp, maxHp: hp, isBoss, alive: true,
     spawnTime: performance.now(),
-    movePattern: Math.random() > 0.5 ? 'sway' : 'none',
-    moveSpeed: 0.5 + Math.random() * 1.5,
+    movePattern: Math.random() > 0.4 ? 'sway' : 'none',
+    moveSpeed: 0.8 + Math.random() * 1.2,
     moveOffset: Math.random() * Math.PI * 2,
-    baseX: x,
-    baseY: y + height / 2,
-    radius: 0.35 * scale,
-    height: height,
+    baseX: x, baseY: y + height / 2,
+    radius: 0.5 * scale,
+    height,
   };
 }
 
@@ -431,99 +517,143 @@ function createDummy(x, y, z, hp = 1) {
   const group = new THREE.Group();
 
   // Body
-  const bodyGeo = new THREE.CylinderGeometry(0.2, 0.25, 1.2, 8);
+  const bodyGeo = new THREE.CylinderGeometry(0.25, 0.3, 1.4, 8);
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x886644, roughness: 0.8 });
   const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.6;
+  body.position.y = 0.7;
   body.castShadow = true;
   group.add(body);
 
   // Head
-  const headGeo = new THREE.SphereGeometry(0.2, 12, 8);
+  const headGeo = new THREE.SphereGeometry(0.24, 12, 8);
   const headMat = new THREE.MeshStandardMaterial({ color: 0xaa8866, roughness: 0.7 });
   const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 1.4;
+  head.position.y = 1.6;
   head.castShadow = true;
   group.add(head);
 
   // Arms
-  for (let side of [-1, 1]) {
-    const armGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8, 6);
+  for (const side of [-1, 1]) {
+    const armGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.9, 6);
     const arm = new THREE.Mesh(armGeo, bodyMat);
-    arm.position.set(side * 0.35, 0.8, 0);
+    arm.position.set(side * 0.4, 0.9, 0);
     arm.rotation.z = side * 0.5;
     group.add(arm);
   }
 
-  // Target marker
-  const markerGeo = new THREE.CircleGeometry(0.15, 16);
-  const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+  // Target marker (larger, glowing)
+  const markerGeo = new THREE.CircleGeometry(0.2, 16);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xff3300, side: THREE.DoubleSide });
   const marker = new THREE.Mesh(markerGeo, markerMat);
-  marker.position.set(0, 0.8, 0.26);
+  marker.position.set(0, 0.9, 0.31);
   group.add(marker);
+
+  // Inner bullseye
+  const bullseyeGeo = new THREE.CircleGeometry(0.08, 12);
+  const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xffcc00, side: THREE.DoubleSide });
+  const bullseye = new THREE.Mesh(bullseyeGeo, bullseyeMat);
+  bullseye.position.set(0, 0.9, 0.32);
+  group.add(bullseye);
+
+  // Glow light
+  const glow = new THREE.PointLight(0xff6a00, 0.5, 4);
+  glow.position.set(0, 0.9, 0.5);
+  group.add(glow);
 
   group.position.set(x, y, z);
   scene.add(group);
 
   return {
     mesh: group,
-    hp: hp,
-    maxHp: hp,
-    isBoss: false,
-    alive: true,
+    hp, maxHp: hp, isBoss: false, alive: true,
     spawnTime: performance.now(),
     movePattern: 'strafe',
-    moveSpeed: 1 + Math.random() * 2,
+    moveSpeed: 0.8 + Math.random() * 1.5,
     moveOffset: Math.random() * Math.PI * 2,
-    baseX: x,
-    baseY: y,
-    radius: 0.4,
-    height: 1.6,
+    baseX: x, baseY: y,
+    radius: 0.55,
+    height: 1.8,
   };
 }
 
 // ========== PARTICLES ==========
 function spawnParticles(position, color, count = 15) {
   for (let i = 0; i < count; i++) {
-    const size = 0.03 + Math.random() * 0.08;
-    const geo = new THREE.BoxGeometry(size, size, size);
-    const mat = new THREE.MeshBasicMaterial({ color: color });
+    const size = 0.04 + Math.random() * 0.1;
+    const geo = new THREE.BoxGeometry(size, size * 0.3, size * 0.5);
+    const mat = new THREE.MeshBasicMaterial({ color });
     const particle = new THREE.Mesh(geo, mat);
     particle.position.copy(position);
+    particle.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);
     const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 8,
-      Math.random() * 6 + 2,
-      (Math.random() - 0.5) * 8
+      (Math.random() - 0.5) * 10,
+      Math.random() * 8 + 2,
+      (Math.random() - 0.5) * 10
     );
     scene.add(particle);
-    state.particles.push({ mesh: particle, vel, life: 1, decay: 0.02 + Math.random() * 0.02 });
+    state.particles.push({ mesh: particle, vel, life: 1, decay: 0.015 + Math.random() * 0.02 });
   }
 }
 
 function spawnExplosion(position) {
-  // Big orange flash
-  const flashGeo = new THREE.SphereGeometry(2, 16, 8);
+  // Big orange flash sphere
+  const flashGeo = new THREE.SphereGeometry(2.5, 16, 8);
   const flashMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 });
   const flash = new THREE.Mesh(flashGeo, flashMat);
   flash.position.copy(position);
   scene.add(flash);
-  state.particles.push({ mesh: flash, vel: new THREE.Vector3(0,0,0), life: 1, decay: 0.05, isFlash: true });
+  state.particles.push({ mesh: flash, vel: new THREE.Vector3(0,0,0), life: 1, decay: 0.04, isFlash: true });
 
-  spawnParticles(position, 0xff4400, 30);
-  spawnParticles(position, 0xffcc00, 20);
+  // Inner bright flash
+  const innerGeo = new THREE.SphereGeometry(1, 12, 6);
+  const innerMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 1 });
+  const inner = new THREE.Mesh(innerGeo, innerMat);
+  inner.position.copy(position);
+  scene.add(inner);
+  state.particles.push({ mesh: inner, vel: new THREE.Vector3(0,0,0), life: 1, decay: 0.06, isFlash: true });
+
+  spawnParticles(position, 0xff4400, 35);
+  spawnParticles(position, 0xffcc00, 25);
+  spawnParticles(position, 0xff0000, 15);
+
+  state.screenShake = 0.5;
+}
+
+// ========== HIT TEXT POPUP ==========
+function showHitText(worldPos, text, color = '#ffcc00') {
+  // Project 3D position to screen
+  const pos = worldPos.clone();
+  pos.project(camera);
+  const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-pos.y * 0.5 + 0.5) * window.innerHeight;
+
+  const el = document.createElement('div');
+  el.className = 'hit-text';
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.color = color;
+  el.style.fontSize = text.length > 5 ? '18px' : '24px';
+  el.style.textShadow = `0 0 10px ${color}`;
+  document.getElementById('hit-texts').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
 // ========== SHURIKEN THROWING ==========
 function throwShuriken(targetPos, offset = new THREE.Vector3(0,0,0)) {
   const shuriken = new THREE.Mesh(shurikenGeo, shurikenMat.clone());
-  const startPos = camera.position.clone().add(new THREE.Vector3(0, -0.3, 0));
+  const startPos = camera.position.clone().add(new THREE.Vector3(0, -0.3, -0.5));
   shuriken.position.copy(startPos);
   shuriken.castShadow = true;
   scene.add(shuriken);
 
+  // Add a small trail light to the shuriken
+  const trail = new THREE.PointLight(0xaaaaaa, 0.3, 3);
+  shuriken.add(trail);
+
   const target = targetPos.clone().add(offset);
   const direction = target.clone().sub(startPos).normalize();
-  const speed = 25;
+  const speed = 30;
 
   state.shuriken.push({
     mesh: shuriken,
@@ -531,6 +661,9 @@ function throwShuriken(targetPos, offset = new THREE.Vector3(0,0,0)) {
     life: 3,
     isRasengan: state.activePower === 'rasengan',
   });
+
+  // Screen shake on throw
+  state.screenShake = Math.max(state.screenShake, 0.08);
 }
 
 // ========== GAME LOGIC ==========
@@ -538,27 +671,25 @@ function startWave() {
   state.waveActive = true;
   state.waveTargetsSpawned = 0;
   state.waveTargetsNeeded = 5 + state.wave * 3;
-  state.spawnInterval = Math.max(0.4, 1.5 - state.wave * 0.1);
-  state.spawnTimer = 0;
-  state.missesThisWave = 0;
+  state.spawnInterval = Math.max(0.5, 1.6 - state.wave * 0.08);
+  state.spawnTimer = 0.5; // Small delay before first spawn
 
   // Show wave announcement
   const announce = document.getElementById('wave-announce');
-  announce.textContent = `WAVE ${state.wave}!`;
+  announce.innerHTML = `第${state.wave}波<br><span style="font-size:30px">WAVE ${state.wave}!</span>`;
   announce.classList.add('show');
   setTimeout(() => announce.classList.remove('show'), 2000);
 }
 
 function spawnTarget() {
-  const x = (Math.random() - 0.5) * 12;
-  const y = Math.random() * 3;
-  const z = -3 - Math.random() * 6;
-
-  const waveProgress = state.waveTargetsSpawned / state.waveTargetsNeeded;
+  // Keep targets within camera view -- narrower x range, controlled z range
+  const x = (Math.random() - 0.5) * 10;
+  const y = 0.3 + Math.random() * 2.5;
+  const z = -2 - Math.random() * 5;
 
   // Boss on last target of wave (if wave >= 3)
   if (state.wave >= 3 && state.waveTargetsSpawned === state.waveTargetsNeeded - 1) {
-    const boss = createTrainingPost(x, y, z, 3 + Math.floor(state.wave / 2), true);
+    const boss = createTrainingPost(0, y, z - 1, 3 + Math.floor(state.wave / 2), true);
     state.targets.push(boss);
   } else if (Math.random() > 0.5) {
     const hp = state.wave >= 4 ? 2 : 1;
@@ -574,42 +705,74 @@ function checkHits() {
   for (let si = state.shuriken.length - 1; si >= 0; si--) {
     const s = state.shuriken[si];
     const sPos = s.mesh.position;
+    const sPrev = s.prevPos || sPos.clone();
 
     for (let ti = state.targets.length - 1; ti >= 0; ti--) {
       const t = state.targets[ti];
       if (!t.alive) continue;
 
       const tPos = t.mesh.position;
-      const dist = sPos.distanceTo(tPos);
-      const hitDist = s.isRasengan ? 2.5 : t.radius + 0.3;
+      // Swept collision: check closest point on line segment (prevPos -> sPos) to target
+      const segDir = sPos.clone().sub(sPrev);
+      const segLen = segDir.length();
+      let dist;
+      if (segLen < 0.001) {
+        dist = sPos.distanceTo(tPos);
+      } else {
+        const segNorm = segDir.clone().divideScalar(segLen);
+        const toTarget = tPos.clone().sub(sPrev);
+        const proj = toTarget.dot(segNorm);
+        const clamped = Math.max(0, Math.min(segLen, proj));
+        const closestPt = sPrev.clone().add(segNorm.multiplyScalar(clamped));
+        dist = closestPt.distanceTo(tPos);
+      }
+      const hitDist = s.isRasengan ? 3.0 : t.radius + 1.0;
+
+      // Debug: log every comparison
+      if (dist < 10) {
+        console.log(`Shuriken at z=${sPos.z.toFixed(1)} dist=${dist.toFixed(2)} hitDist=${hitDist.toFixed(2)} tPos=(${tPos.x.toFixed(1)},${tPos.y.toFixed(1)},${tPos.z.toFixed(1)}) sPos=(${sPos.x.toFixed(1)},${sPos.y.toFixed(1)},${sPos.z.toFixed(1)})`);
+      }
 
       if (dist < hitDist) {
         // Hit!
         if (s.isRasengan) {
-          // Rasengan hits all nearby targets
           spawnExplosion(sPos);
           for (const target of state.targets) {
             if (!target.alive) continue;
-            if (target.mesh.position.distanceTo(sPos) < 3) {
+            if (target.mesh.position.distanceTo(sPos) < 4) {
               target.hp -= 5;
               if (target.hp <= 0) destroyTarget(target);
             }
           }
+          showHitText(sPos, '螺旋丸!', '#00aaff');
         } else {
           t.hp--;
-          spawnParticles(sPos, 0x8B6914, 8);
+          spawnParticles(sPos, 0x8B6914, 10);
+          spawnParticles(sPos, 0xffaa44, 5);
+          state.screenShake = Math.max(state.screenShake, 0.15);
 
           if (t.hp <= 0) {
             destroyTarget(t);
           } else {
-            // Flash red
+            // Flash red + show HP text
             t.mesh.children[0].material.emissive = new THREE.Color(0xff0000);
-            t.mesh.children[0].material.emissiveIntensity = 0.5;
+            t.mesh.children[0].material.emissiveIntensity = 0.8;
             setTimeout(() => {
               if (t.mesh.children[0]) {
                 t.mesh.children[0].material.emissiveIntensity = 0;
               }
-            }, 150);
+            }, 200);
+            showHitText(sPos, `${t.hp}/${t.maxHp}`, '#ff6644');
+
+            // Update boss HP bar
+            if (t.isBoss) {
+              const hpFill = t.mesh.getObjectByName('hpFill');
+              if (hpFill) {
+                const ratio = t.hp / t.maxHp;
+                hpFill.scale.x = ratio;
+                hpFill.position.x = -(1 - ratio) * 0.59;
+              }
+            }
           }
         }
 
@@ -624,23 +787,42 @@ function checkHits() {
 
 function destroyTarget(target) {
   target.alive = false;
-  spawnParticles(target.mesh.position, 0x8B6914, 20);
-  spawnParticles(target.mesh.position, 0xff6a00, 10);
+  const pos = target.mesh.position.clone();
+
+  // Big destruction effect
+  spawnParticles(pos, 0x8B6914, 25);
+  spawnParticles(pos, 0xff6a00, 15);
+  if (target.isBoss) {
+    spawnParticles(pos, 0xffcc00, 20);
+    state.screenShake = 0.4;
+  } else {
+    state.screenShake = Math.max(state.screenShake, 0.2);
+  }
   scene.remove(target.mesh);
 
   // Score
   state.combo++;
-  state.comboTimer = 2;
+  state.comboTimer = 2.5;
   const multiplier = Math.min(state.combo, 10);
-  const points = (target.isBoss ? 500 : 100) * multiplier;
+  const basePoints = target.isBoss ? 500 : 100;
+  const points = basePoints * multiplier;
   state.score += points;
 
-  state.targetsDestroyed++;
+  // Show score popup
+  const comboText = multiplier > 1 ? ` x${multiplier}` : '';
+  showHitText(pos, `+${points}${comboText}`, multiplier >= 5 ? '#ff44ff' : multiplier >= 3 ? '#ffcc00' : '#ffffff');
+
+  if (target.isBoss) {
+    showHitText(pos.clone().add(new THREE.Vector3(0, 0.5, 0)), 'BOSS DEFEATED!', '#ff4444');
+  }
+
   updateHUD();
 }
 
 function missTarget(target) {
   target.alive = false;
+  // Fade-out particles
+  spawnParticles(target.mesh.position, 0x444444, 5);
   scene.remove(target.mesh);
   state.lives--;
   state.combo = 0;
@@ -654,10 +836,16 @@ function missTarget(target) {
 function endGame() {
   state.gameOver = true;
   state.gameStarted = false;
+
+  // Clean up slow-mo
+  state.slowMotion = false;
+  document.getElementById('slow-mo-overlay').classList.remove('active');
+  document.getElementById('slow-mo-timer').classList.remove('show');
+
   const gameOverEl = document.getElementById('game-over');
   gameOverEl.style.display = 'flex';
   gameOverEl.querySelector('.final-score').textContent =
-    `スコア / Score: ${state.score} | Wave ${state.wave}`;
+    `スコア / Score: ${state.score} | 第${state.wave}波 / Wave ${state.wave}`;
 }
 
 function resetGame() {
@@ -678,11 +866,17 @@ function resetGame() {
   state.particles = [];
   state.powerups = { clone: 3, rasengan: 2, sharingan: 1 };
   state.slowMotion = false;
+  state.slowMotionTimer = 0;
   state.activePower = null;
   state.waveTargetsSpawned = 0;
-  state.targetsDestroyed = 0;
+  state.screenShake = 0;
 
   document.getElementById('slow-mo-overlay').classList.remove('active');
+  document.getElementById('slow-mo-timer').classList.remove('show');
+  document.getElementById('active-power-label').classList.remove('show');
+  document.querySelectorAll('.powerup-btn').forEach(b => b.classList.remove('active-power'));
+  document.getElementById('hit-texts').innerHTML = '';
+
   updateHUD();
   updatePowerupButtons();
   startWave();
@@ -690,15 +884,26 @@ function resetGame() {
 
 // ========== HUD ==========
 function updateHUD() {
-  document.querySelector('#score-panel .score').textContent = state.score;
+  const scoreEl = document.querySelector('#score-panel .score');
+  scoreEl.textContent = state.score.toLocaleString();
+
   const comboEl = document.querySelector('#score-panel .combo');
   if (state.combo > 1) {
     comboEl.textContent = `COMBO x${state.combo}`;
+    comboEl.style.transform = 'scale(1.2)';
+    setTimeout(() => comboEl.style.transform = 'scale(1)', 150);
   } else {
     comboEl.textContent = '';
   }
+
   document.querySelector('#wave-panel .wave').textContent = `WAVE ${state.wave}`;
-  document.querySelector('#wave-panel .lives').textContent = '❤️'.repeat(state.lives) + '🖤'.repeat(state.maxLives - state.lives);
+
+  const livesEl = document.querySelector('#wave-panel .lives');
+  let hearts = '';
+  for (let i = 0; i < state.maxLives; i++) {
+    hearts += i < state.lives ? '<span style="filter:none">❤️</span>' : '<span style="filter:grayscale(1) opacity(0.4)">❤️</span>';
+  }
+  livesEl.innerHTML = hearts;
 }
 
 function updatePowerupButtons() {
@@ -715,41 +920,70 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 function getClickTarget(event) {
-  const x = event.clientX || (event.touches && event.touches[0].clientX);
-  const y = event.clientY || (event.touches && event.touches[0].clientY);
+  const x = event.clientX ?? (event.touches?.[0]?.clientX ?? window.innerWidth / 2);
+  const y = event.clientY ?? (event.touches?.[0]?.clientY ?? window.innerHeight / 2);
   mouse.x = (x / window.innerWidth) * 2 - 1;
   mouse.y = -(y / window.innerHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
 
-  // Get point on a plane at z=-2 (target area)
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 5);
+  // First try to intersect with actual target meshes
+  const targetMeshes = state.targets.filter(t => t.alive).map(t => t.mesh);
+  if (targetMeshes.length > 0) {
+    const intersects = raycaster.intersectObjects(targetMeshes, true);
+    if (intersects.length > 0) {
+      return intersects[0].point;
+    }
+  }
+
+  // Find the closest alive target to the ray and aim at it
+  let closestDist = Infinity;
+  let closestTarget = null;
+  const ray = raycaster.ray;
+  for (const t of state.targets) {
+    if (!t.alive) continue;
+    const tp = t.mesh.position.clone();
+    // Distance from point to ray
+    const v = tp.clone().sub(ray.origin);
+    const proj = v.dot(ray.direction);
+    if (proj < 0) continue;
+    const closest = ray.origin.clone().add(ray.direction.clone().multiplyScalar(proj));
+    const dist = tp.distanceTo(closest);
+    if (dist < 2 && dist < closestDist) {
+      closestDist = dist;
+      closestTarget = t;
+    }
+  }
+  if (closestTarget) {
+    return closestTarget.mesh.position.clone();
+  }
+
+  // Fallback: intersect with plane at z=-4
+  const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 4);
   const targetPoint = new THREE.Vector3();
   raycaster.ray.intersectPlane(plane, targetPoint);
 
-  if (!targetPoint) {
-    return new THREE.Vector3(mouse.x * 8, mouse.y * 4 + 2, -5);
-  }
-  return targetPoint;
+  return targetPoint || new THREE.Vector3(mouse.x * 8, mouse.y * 4 + 2, -4);
 }
 
 function handleThrow(event) {
   if (!state.gameStarted || state.gameOver) return;
-
-  // Don't throw if clicking powerup buttons
-  if (event.target.closest && event.target.closest('.powerup-btn')) return;
+  if (event.target?.closest?.('.powerup-btn')) return;
 
   const target = getClickTarget(event);
 
   if (state.activePower === 'clone') {
-    // Shadow clone: 3 shuriken spread
-    throwShuriken(target, new THREE.Vector3(-0.5, 0.3, 0));
+    throwShuriken(target, new THREE.Vector3(-0.8, 0.2, 0));
     throwShuriken(target, new THREE.Vector3(0, 0, 0));
-    throwShuriken(target, new THREE.Vector3(0.5, 0.3, 0));
+    throwShuriken(target, new THREE.Vector3(0.8, 0.2, 0));
     state.activePower = null;
+    document.getElementById('active-power-label').classList.remove('show');
+    document.querySelectorAll('.powerup-btn').forEach(b => b.classList.remove('active-power'));
   } else if (state.activePower === 'rasengan') {
     throwShuriken(target);
     state.activePower = null;
+    document.getElementById('active-power-label').classList.remove('show');
+    document.querySelectorAll('.powerup-btn').forEach(b => b.classList.remove('active-power'));
   } else {
     throwShuriken(target);
   }
@@ -763,8 +997,9 @@ renderer.domElement.addEventListener('touchstart', (e) => {
 
 // Powerup buttons
 document.querySelectorAll('.powerup-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
+  const handler = (e) => {
     e.stopPropagation();
+    e.preventDefault();
     const power = btn.dataset.power;
     if (state.powerups[power] <= 0 || !state.gameStarted) return;
 
@@ -775,22 +1010,27 @@ document.querySelectorAll('.powerup-btn').forEach(btn => {
       state.slowMotion = true;
       state.slowMotionTimer = 5;
       document.getElementById('slow-mo-overlay').classList.add('active');
+      document.getElementById('slow-mo-timer').classList.add('show');
     } else {
       state.activePower = power;
+      // Highlight active power
+      document.querySelectorAll('.powerup-btn').forEach(b => b.classList.remove('active-power'));
+      btn.classList.add('active-power');
+      const label = document.getElementById('active-power-label');
+      label.textContent = power === 'clone' ? '影分身の術! - Shadow Clone active' : '螺旋丸! - Rasengan active';
+      label.classList.add('show');
     }
-  });
-
+  };
+  btn.addEventListener('click', handler);
   btn.addEventListener('touchstart', (e) => {
     e.stopPropagation();
-    e.preventDefault();
-    btn.click();
+    handler(e);
   }, { passive: false });
 });
 
 // Start / Restart
 document.getElementById('start-btn').addEventListener('click', () => {
   document.getElementById('start-screen').style.display = 'none';
-  state.gameStarted = true;
   resetGame();
 });
 
@@ -813,22 +1053,49 @@ function update() {
   const now = performance.now();
   let dt = (now - lastTime) / 1000;
   lastTime = now;
+  dt = Math.min(dt, 0.05); // Cap delta to avoid huge jumps
 
   if (!state.gameStarted || state.gameOver) {
+    // Gentle camera sway on menu
+    camera.position.x = baseCamPos.x + Math.sin(now * 0.0005) * 0.3;
+    camera.position.y = baseCamPos.y + Math.sin(now * 0.0003) * 0.1;
+    camera.lookAt(0, 2, 0);
     renderer.render(scene, camera);
     requestAnimationFrame(update);
     return;
   }
 
+  window._gameLoopCount = (window._gameLoopCount || 0) + 1;
+  window._lastDt = dt;
+  window._lastSpawnTimer = state.spawnTimer;
+
   // Slow motion
   if (state.slowMotion) {
     state.slowMotionTimer -= dt;
-    dt *= 0.3;
+    const timerEl = document.getElementById('slow-mo-timer');
+    timerEl.textContent = `写輪眼 SHARINGAN: ${Math.ceil(state.slowMotionTimer)}s`;
+    dt *= 0.25;
     if (state.slowMotionTimer <= 0) {
       state.slowMotion = false;
+      state.slowMotionTimer = 0;
       document.getElementById('slow-mo-overlay').classList.remove('active');
+      timerEl.classList.remove('show');
     }
   }
+
+  // Screen shake
+  if (state.screenShake > 0) {
+    camera.position.x = baseCamPos.x + (Math.random() - 0.5) * state.screenShake * 2;
+    camera.position.y = baseCamPos.y + (Math.random() - 0.5) * state.screenShake;
+    state.screenShake *= 0.85;
+    if (state.screenShake < 0.01) {
+      state.screenShake = 0;
+      camera.position.copy(baseCamPos);
+    }
+  } else {
+    camera.position.copy(baseCamPos);
+  }
+  camera.lookAt(0, 2, 0);
 
   // Combo decay
   if (state.comboTimer > 0) {
@@ -842,6 +1109,7 @@ function update() {
   // Spawn targets
   if (state.waveActive && state.waveTargetsSpawned < state.waveTargetsNeeded) {
     state.spawnTimer -= dt;
+    window._spawnTimerTrack = state.spawnTimer;
     if (state.spawnTimer <= 0) {
       spawnTarget();
       state.spawnTimer = state.spawnInterval;
@@ -854,13 +1122,20 @@ function update() {
     if (aliveTargets.length === 0) {
       state.waveActive = false;
       state.wave++;
-      // Bonus powerups every 3 waves
-      if (state.wave % 3 === 0) {
+
+      // Bonus powerups every 2 waves
+      if (state.wave % 2 === 0) {
         state.powerups.clone += 2;
         state.powerups.rasengan += 1;
-        state.powerups.sharingan += 1;
+        if (state.wave % 4 === 0) state.powerups.sharingan += 1;
         updatePowerupButtons();
       }
+      // Recover 1 life every wave if below max
+      if (state.lives < state.maxLives) {
+        state.lives++;
+        updateHUD();
+      }
+
       setTimeout(() => startWave(), 1500);
     }
   }
@@ -868,9 +1143,11 @@ function update() {
   // Update shuriken
   for (let i = state.shuriken.length - 1; i >= 0; i--) {
     const s = state.shuriken[i];
+    s.prevPos = s.mesh.position.clone(); // Store for swept collision
     s.mesh.position.add(s.velocity.clone().multiplyScalar(dt));
-    s.mesh.rotation.z += dt * 25; // Spin!
-    s.velocity.y -= dt * 5; // Gravity (slight arc)
+    s.mesh.rotation.z += dt * 30; // Fast spin!
+    s.mesh.rotation.x += dt * 5;
+    s.velocity.y -= dt * 3; // Slight gravity arc
     s.life -= dt;
 
     if (s.life <= 0 || s.mesh.position.z < -15 || s.mesh.position.y < -5) {
@@ -886,17 +1163,44 @@ function update() {
 
     const elapsed = (now - t.spawnTime) / 1000;
 
-    // Movement
+    // Movement patterns
     if (t.movePattern === 'sway') {
-      t.mesh.position.x = t.baseX + Math.sin(elapsed * t.moveSpeed + t.moveOffset) * 1.5;
+      t.mesh.position.x = t.baseX + Math.sin(elapsed * t.moveSpeed + t.moveOffset) * 2;
     } else if (t.movePattern === 'strafe') {
       t.mesh.position.x = t.baseX + Math.sin(elapsed * t.moveSpeed + t.moveOffset) * 2.5;
       t.mesh.position.y = t.baseY + Math.sin(elapsed * t.moveSpeed * 0.7 + t.moveOffset) * 0.5;
     }
 
-    // Targets expire after some time - miss penalty
-    const lifespan = Math.max(3, 8 - state.wave * 0.3);
-    if (elapsed > lifespan) {
+    // Pulsing glow effect on targets
+    const pulse = 0.5 + Math.sin(elapsed * 4) * 0.3;
+    const rings = t.mesh.children.filter(c => c.material?.emissiveIntensity !== undefined && c !== t.mesh.children[0]);
+    rings.forEach(r => {
+      if (r.material.emissive) r.material.emissiveIntensity = pulse;
+    });
+
+    // Boss HP bar faces camera
+    if (t.isBoss) {
+      const hpBg = t.mesh.getObjectByName('hpBg');
+      const hpFill = t.mesh.getObjectByName('hpFill');
+      if (hpBg) hpBg.lookAt(camera.position);
+      if (hpFill) hpFill.lookAt(camera.position);
+    }
+
+    // Targets expire -- lifespan scales with wave
+    const lifespan = Math.max(4, 9 - state.wave * 0.25);
+    const bossLifespan = lifespan * 1.5;
+    const thisLifespan = t.isBoss ? bossLifespan : lifespan;
+
+    // Warning flash when about to expire
+    if (elapsed > thisLifespan - 2) {
+      const flashRate = Math.sin(elapsed * 8) > 0;
+      if (t.mesh.children[0]?.material) {
+        t.mesh.children[0].material.emissive = flashRate ? new THREE.Color(0xff0000) : new THREE.Color(0x000000);
+        t.mesh.children[0].material.emissiveIntensity = flashRate ? 0.3 : 0;
+      }
+    }
+
+    if (elapsed > thisLifespan) {
       missTarget(t);
       state.targets.splice(i, 1);
     }
@@ -907,14 +1211,16 @@ function update() {
     const p = state.particles[i];
     p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
     if (!p.isFlash) {
-      p.vel.y -= dt * 15;
+      p.vel.y -= dt * 18;
+      p.mesh.rotation.x += dt * 5;
+      p.mesh.rotation.z += dt * 3;
     }
     p.life -= p.decay;
-    p.mesh.material.opacity = p.life;
+    p.mesh.material.opacity = Math.max(0, p.life);
     p.mesh.material.transparent = true;
 
     if (p.isFlash) {
-      p.mesh.scale.multiplyScalar(1 + dt * 5);
+      p.mesh.scale.multiplyScalar(1 + dt * 6);
     }
 
     if (p.life <= 0) {
@@ -930,7 +1236,14 @@ function update() {
   requestAnimationFrame(update);
 }
 
+// Debug: expose state to window for debugging
+window._state = state;
+window._camera = camera;
+
+updateHUD();
 update();
 </script>
+
+<img src="https://visitor-badge.laobi.icu/badge?page_id=pndshch.shuriken-master&left_color=%23161b22&right_color=%2330363d&left_text=visitors" alt="visitors" style="position:fixed;bottom:8px;right:8px;z-index:9999;opacity:0.6;transition:opacity 0.2s;cursor:pointer;height:18px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">
 </body>
 </html>
